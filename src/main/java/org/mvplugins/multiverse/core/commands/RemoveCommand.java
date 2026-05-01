@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import org.jetbrains.annotations.NotNull;
 import org.jvnet.hk2.annotations.Service;
 
+import org.mvplugins.multiverse.core.MultiverseCore;
 import org.mvplugins.multiverse.core.command.LegacyAliasCommand;
 import org.mvplugins.multiverse.core.command.MVCommandIssuer;
 import org.mvplugins.multiverse.core.command.MVCommandManager;
@@ -21,6 +22,7 @@ import org.mvplugins.multiverse.core.command.flag.ParsedCommandFlags;
 import org.mvplugins.multiverse.core.command.flags.RemovePlayerFlags;
 import org.mvplugins.multiverse.core.locale.MVCorei18n;
 import org.mvplugins.multiverse.core.locale.message.MessageReplacement.Replace;
+import org.mvplugins.multiverse.core.utils.FoliaCompat;
 import org.mvplugins.multiverse.core.utils.result.AsyncAttemptsAggregate;
 import org.mvplugins.multiverse.core.world.MultiverseWorld;
 import org.mvplugins.multiverse.core.world.WorldManager;
@@ -30,16 +32,19 @@ import org.mvplugins.multiverse.core.world.options.RemoveWorldOptions;
 @Service
 class RemoveCommand extends CoreCommand {
 
+    private final MultiverseCore plugin;
     private final WorldManager worldManager;
     private final PlayerWorldTeleporter playerWorldTeleporter;
     private final Flags flags;
 
     @Inject
     RemoveCommand(
+            @NotNull MultiverseCore plugin,
             @NotNull WorldManager worldManager,
             @NotNull PlayerWorldTeleporter playerWorldTeleporter,
             @NotNull Flags flags
     ) {
+        this.plugin = plugin;
         this.worldManager = worldManager;
         this.playerWorldTeleporter = playerWorldTeleporter;
         this.flags = flags;
@@ -72,7 +77,7 @@ class RemoveCommand extends CoreCommand {
     }
 
     private void doWorldRemoving(MVCommandIssuer issuer, MultiverseWorld world, ParsedCommandFlags parsedFlags) {
-        worldManager.removeWorld(RemoveWorldOptions.world(world)
+        FoliaCompat.runOnGlobalRegion(plugin, () -> worldManager.removeWorld(RemoveWorldOptions.world(world)
                         .saveBukkitWorld(!parsedFlags.hasFlag(flags.noSave))
                         .unloadBukkitWorld(!parsedFlags.hasFlag(flags.noUnloadBukkitWorld)))
                 .onSuccess(removedWorldName -> {
@@ -81,7 +86,7 @@ class RemoveCommand extends CoreCommand {
                 }).onFailure(failure -> {
                     Logging.fine("World remove failure: " + failure);
                     issuer.sendError(failure.getFailureMessage());
-                });
+                }));
     }
 
     @Service
@@ -107,11 +112,12 @@ class RemoveCommand extends CoreCommand {
     private static final class LegacyAlias extends RemoveCommand implements LegacyAliasCommand {
         @Inject
         LegacyAlias(
+                @NotNull MultiverseCore plugin,
                 @NotNull WorldManager worldManager,
                 @NotNull PlayerWorldTeleporter playerWorldTeleporter,
                 @NotNull Flags flags
         ) {
-            super(worldManager, playerWorldTeleporter, flags);
+            super(plugin, worldManager, playerWorldTeleporter, flags);
         }
 
         @Override

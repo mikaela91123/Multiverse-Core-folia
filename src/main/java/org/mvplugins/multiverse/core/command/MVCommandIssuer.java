@@ -8,6 +8,7 @@ import org.jetbrains.annotations.NotNull;
 
 import org.mvplugins.multiverse.core.locale.message.Message;
 import org.mvplugins.multiverse.core.locale.message.MessageReplacement;
+import org.mvplugins.multiverse.core.utils.FoliaCompat;
 import org.mvplugins.multiverse.core.utils.text.ChatTextFormatter;
 
 public class MVCommandIssuer extends BukkitCommandIssuer {
@@ -26,7 +27,8 @@ public class MVCommandIssuer extends BukkitCommandIssuer {
 
     @Override
     public void sendMessageInternal(String message) {
-        ChatTextFormatter.sendFormattedMessage(getIssuer(), message);
+        FoliaCompat.runForSender(commandManager.getPlugin(), getIssuer(),
+                () -> ChatTextFormatter.sendFormattedMessage(getIssuer(), message));
     }
 
     public void sendError(String message, MessageReplacement... replacements) {

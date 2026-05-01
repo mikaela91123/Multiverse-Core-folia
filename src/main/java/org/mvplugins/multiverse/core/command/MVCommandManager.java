@@ -33,6 +33,7 @@ import org.mvplugins.multiverse.core.world.helpers.WorldNameChecker;
 @Service
 public class MVCommandManager extends PaperCommandManager {
 
+    private final MultiverseCore plugin;
     private final CommandFlagsManager flagsManager;
     private final CommandQueueManager commandQueueManager;
     private final Provider<MVCommandContexts> commandContextsProvider;
@@ -54,6 +55,7 @@ public class MVCommandManager extends PaperCommandManager {
             @NotNull CoreConfig config
             ) {
         super(plugin);
+        this.plugin = plugin;
         this.flagsManager = flagsManager;
         this.commandQueueManager = commandQueueManager;
         this.commandContextsProvider = commandContextsProvider;
@@ -176,6 +178,10 @@ public class MVCommandManager extends PaperCommandManager {
 
     public @NotNull MVCommandIssuer getConsoleCommandIssuer() {
         return getCommandIssuer(Bukkit.getConsoleSender());
+    }
+
+    public @NotNull MultiverseCore getPlugin() {
+        return plugin;
     }
 
     @Override

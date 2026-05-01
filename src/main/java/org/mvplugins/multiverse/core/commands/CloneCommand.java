@@ -12,6 +12,7 @@ import jakarta.inject.Inject;
 import org.jetbrains.annotations.NotNull;
 import org.jvnet.hk2.annotations.Service;
 
+import org.mvplugins.multiverse.core.MultiverseCore;
 import org.mvplugins.multiverse.core.command.LegacyAliasCommand;
 import org.mvplugins.multiverse.core.command.MVCommandIssuer;
 import org.mvplugins.multiverse.core.command.flag.CommandFlag;
@@ -20,6 +21,7 @@ import org.mvplugins.multiverse.core.command.flag.FlagBuilder;
 import org.mvplugins.multiverse.core.command.flag.ParsedCommandFlags;
 import org.mvplugins.multiverse.core.locale.MVCorei18n;
 import org.mvplugins.multiverse.core.locale.message.MessageReplacement.Replace;
+import org.mvplugins.multiverse.core.utils.FoliaCompat;
 import org.mvplugins.multiverse.core.world.MultiverseWorld;
 import org.mvplugins.multiverse.core.world.WorldManager;
 import org.mvplugins.multiverse.core.world.options.CloneWorldOptions;
@@ -29,11 +31,13 @@ import static org.mvplugins.multiverse.core.locale.message.MessageReplacement.re
 @Service
 class CloneCommand extends CoreCommand {
 
+    private final MultiverseCore plugin;
     private final WorldManager worldManager;
     private final CloneCommand.Flags flags;
 
     @Inject
-    CloneCommand(@NotNull WorldManager worldManager, @NotNull Flags flags) {
+    CloneCommand(@NotNull MultiverseCore plugin, @NotNull WorldManager worldManager, @NotNull Flags flags) {
+        this.plugin = plugin;
         this.worldManager = worldManager;
         this.flags = flags;
     }
@@ -68,14 +72,14 @@ class CloneCommand extends CoreCommand {
                 .keepGameRule(!parsedFlags.hasFlag(flags.resetGamerules))
                 .keepWorldBorder(!parsedFlags.hasFlag(flags.resetWorldBorder))
                 .saveBukkitWorld(!parsedFlags.hasFlag(flags.noSave));
-        worldManager.cloneWorld(cloneWorldOptions)
+        FoliaCompat.runOnGlobalRegion(plugin, () -> worldManager.cloneWorld(cloneWorldOptions)
                 .onSuccess(newWorld -> {
                     Logging.fine("World clone success: " + newWorld);
                     issuer.sendInfo(MVCorei18n.CLONE_SUCCESS, Replace.WORLD.with(newWorld.getName()));
                 }).onFailure(failure -> {
                     Logging.fine("World clone failure: " + failure);
                     issuer.sendError(failure.getFailureMessage());
-                });
+                }));
     }
 
     @Service
@@ -108,8 +112,8 @@ class CloneCommand extends CoreCommand {
     @Service
     private final static class LegacyAlias extends CloneCommand implements LegacyAliasCommand {
         @Inject
-        LegacyAlias(@NotNull WorldManager worldManager, @NotNull Flags flags) {
-            super(worldManager, flags);
+        LegacyAlias(@NotNull MultiverseCore plugin, @NotNull WorldManager worldManager, @NotNull Flags flags) {
+            super(plugin, worldManager, flags);
         }
 
         @Override

@@ -17,6 +17,7 @@ import org.bukkit.WorldType;
 import org.jetbrains.annotations.NotNull;
 import org.jvnet.hk2.annotations.Service;
 
+import org.mvplugins.multiverse.core.MultiverseCore;
 import org.mvplugins.multiverse.core.command.LegacyAliasCommand;
 import org.mvplugins.multiverse.core.command.MVCommandIssuer;
 import org.mvplugins.multiverse.core.command.flag.CommandFlag;
@@ -26,6 +27,7 @@ import org.mvplugins.multiverse.core.command.flag.FlagBuilder;
 import org.mvplugins.multiverse.core.command.flag.ParsedCommandFlags;
 import org.mvplugins.multiverse.core.locale.MVCorei18n;
 import org.mvplugins.multiverse.core.locale.message.MessageReplacement.Replace;
+import org.mvplugins.multiverse.core.utils.FoliaCompat;
 import org.mvplugins.multiverse.core.utils.StringFormatter;
 import org.mvplugins.multiverse.core.utils.result.Attempt.Failure;
 import org.mvplugins.multiverse.core.world.LoadedMultiverseWorld;
@@ -40,11 +42,13 @@ import static org.mvplugins.multiverse.core.locale.message.MessageReplacement.re
 @Service
 class CreateCommand extends CoreCommand {
 
+    private final MultiverseCore plugin;
     private final WorldManager worldManager;
     private final CreateCommand.Flags flags;
 
     @Inject
-    CreateCommand(@NotNull WorldManager worldManager, @NotNull Flags flags) {
+    CreateCommand(@NotNull MultiverseCore plugin, @NotNull WorldManager worldManager, @NotNull Flags flags) {
+        this.plugin = plugin;
         this.worldManager = worldManager;
         this.flags = flags;
     }
@@ -77,7 +81,7 @@ class CreateCommand extends CoreCommand {
 
         issuer.sendInfo(MVCorei18n.CREATE_LOADING);
 
-        worldManager.createWorld(CreateWorldOptions.worldName(worldName)
+        FoliaCompat.runOnGlobalRegion(plugin, () -> worldManager.createWorld(CreateWorldOptions.worldName(worldName)
                         .biome(parsedFlags.flagValue(flags.biome, ""))
                         .environment(environment)
                         .seed(parsedFlags.flagValue(flags.seed))
@@ -88,7 +92,7 @@ class CreateCommand extends CoreCommand {
                         .generateStructures(!parsedFlags.hasFlag(flags.noStructures))
                         .worldPropertyStrings(StringFormatter.parseCSVMap(parsedFlags.flagValue(flags.properties))))
                 .onSuccess(newWorld -> messageSuccess(issuer, newWorld))
-                .onFailure(failure -> messageFailure(issuer, failure));
+                .onFailure(failure -> messageFailure(issuer, failure)));
     }
 
     private void messageWorldDetails(MVCommandIssuer issuer, String worldName,
@@ -190,8 +194,8 @@ class CreateCommand extends CoreCommand {
     @Service
     private static final class LegacyAlias extends CreateCommand implements LegacyAliasCommand {
         @Inject
-        LegacyAlias(@NotNull WorldManager worldManager, @NotNull Flags flags) {
-            super(worldManager, flags);
+        LegacyAlias(@NotNull MultiverseCore plugin, @NotNull WorldManager worldManager, @NotNull Flags flags) {
+            super(plugin, worldManager, flags);
         }
 
         @Override
