@@ -17,6 +17,7 @@ import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 import org.jvnet.hk2.annotations.Service;
 
+import org.mvplugins.multiverse.core.MultiverseCore;
 import org.mvplugins.multiverse.core.command.LegacyAliasCommand;
 import org.mvplugins.multiverse.core.command.MVCommandIssuer;
 import org.mvplugins.multiverse.core.command.flag.CommandFlag;
@@ -29,6 +30,7 @@ import org.mvplugins.multiverse.core.command.queue.CommandQueuePayload;
 import org.mvplugins.multiverse.core.locale.MVCorei18n;
 import org.mvplugins.multiverse.core.locale.message.Message;
 import org.mvplugins.multiverse.core.locale.message.MessageReplacement.Replace;
+import org.mvplugins.multiverse.core.utils.FoliaCompat;
 import org.mvplugins.multiverse.core.utils.REPatterns;
 import org.mvplugins.multiverse.core.utils.WorldTickDeferrer;
 import org.mvplugins.multiverse.core.utils.result.AsyncAttemptsAggregate;
@@ -41,6 +43,8 @@ import org.mvplugins.multiverse.core.world.options.RegenWorldOptions;
 class RegenCommand extends CoreCommand {
 
     @NotNull
+    private final MultiverseCore plugin;
+    @NotNull
     private final CommandQueueManager commandQueueManager;
     private final WorldManager worldManager;
     private final PlayerWorldTeleporter playerWorldTeleporter;
@@ -49,12 +53,14 @@ class RegenCommand extends CoreCommand {
 
     @Inject
     RegenCommand(
+            @NotNull MultiverseCore plugin,
             @NotNull CommandQueueManager commandQueueManager,
             @NotNull WorldManager worldManager,
             @NotNull PlayerWorldTeleporter playerWorldTeleporter,
             @NotNull WorldTickDeferrer worldTickDeferrer,
             @NotNull Flags flags
     ) {
+        this.plugin = plugin;
         this.commandQueueManager = commandQueueManager;
         this.worldManager = worldManager;
         this.playerWorldTeleporter = playerWorldTeleporter;
@@ -115,7 +121,7 @@ class RegenCommand extends CoreCommand {
                 .keepWorldBorder(!parsedFlags.hasFlag(flags.resetWorldBorder))
                 .keepFiles(parsedFlags.flagValue(flags.keepFiles));
 
-        worldManager.regenWorld(regenWorldOptions).onSuccess(newWorld -> {
+        FoliaCompat.runOnGlobalRegion(plugin, () -> worldManager.regenWorld(regenWorldOptions).onSuccess(newWorld -> {
             Logging.fine("World regen success: " + newWorld);
             issuer.sendInfo(MVCorei18n.REGEN_SUCCESS, Replace.WORLD.with(newWorld.getName()));
             if (parsedFlags.hasFlag(flags.removePlayers)) {
@@ -124,7 +130,7 @@ class RegenCommand extends CoreCommand {
         }).onFailure(failure -> {
             Logging.warning("World regen failure: " + failure);
             issuer.sendError(failure.getFailureMessage());
-        });
+        }));
     }
 
     @Service
@@ -167,13 +173,14 @@ class RegenCommand extends CoreCommand {
     private static final class LegacyAlias extends RegenCommand implements LegacyAliasCommand {
         @Inject
         LegacyAlias(
+                @NotNull MultiverseCore plugin,
                 @NotNull CommandQueueManager commandQueueManager,
                 @NotNull WorldManager worldManager,
                 @NotNull PlayerWorldTeleporter playerWorldTeleporter,
                 @NotNull WorldTickDeferrer worldTickDeferrer,
                 @NotNull Flags flags
         ) {
-            super(commandQueueManager, worldManager, playerWorldTeleporter, worldTickDeferrer, flags);
+            super(plugin, commandQueueManager, worldManager, playerWorldTeleporter, worldTickDeferrer, flags);
         }
 
         @Override

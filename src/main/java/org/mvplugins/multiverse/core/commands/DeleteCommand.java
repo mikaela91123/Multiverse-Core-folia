@@ -13,6 +13,7 @@ import jakarta.inject.Inject;
 import org.jetbrains.annotations.NotNull;
 import org.jvnet.hk2.annotations.Service;
 
+import org.mvplugins.multiverse.core.MultiverseCore;
 import org.mvplugins.multiverse.core.command.LegacyAliasCommand;
 import org.mvplugins.multiverse.core.command.MVCommandIssuer;
 import org.mvplugins.multiverse.core.command.MVCommandManager;
@@ -23,6 +24,7 @@ import org.mvplugins.multiverse.core.command.queue.CommandQueuePayload;
 import org.mvplugins.multiverse.core.locale.MVCorei18n;
 import org.mvplugins.multiverse.core.locale.message.Message;
 import org.mvplugins.multiverse.core.locale.message.MessageReplacement.Replace;
+import org.mvplugins.multiverse.core.utils.FoliaCompat;
 import org.mvplugins.multiverse.core.utils.WorldTickDeferrer;
 import org.mvplugins.multiverse.core.utils.result.AsyncAttemptsAggregate;
 import org.mvplugins.multiverse.core.world.LoadedMultiverseWorld;
@@ -34,6 +36,7 @@ import org.mvplugins.multiverse.core.world.options.DeleteWorldOptions;
 @Service
 class DeleteCommand extends CoreCommand {
 
+    private final MultiverseCore plugin;
     private final CommandQueueManager commandQueueManager;
     private final WorldManager worldManager;
     private final PlayerWorldTeleporter playerWorldTeleporter;
@@ -42,12 +45,14 @@ class DeleteCommand extends CoreCommand {
 
     @Inject
     DeleteCommand(
+            @NotNull MultiverseCore plugin,
             @NotNull CommandQueueManager commandQueueManager,
             @NotNull WorldManager worldManager,
             @NotNull PlayerWorldTeleporter playerWorldTeleporter,
             @NotNull WorldTickDeferrer worldTickDeferrer,
             @NotNull RemovePlayerFlags flags
     ) {
+        this.plugin = plugin;
         this.commandQueueManager = commandQueueManager;
         this.worldManager = worldManager;
         this.playerWorldTeleporter = playerWorldTeleporter;
@@ -95,26 +100,27 @@ class DeleteCommand extends CoreCommand {
     }
 
     private void doWorldDeleting(MVCommandIssuer issuer, MultiverseWorld world) {
-        worldManager.deleteWorld(DeleteWorldOptions.world(world))
+        FoliaCompat.runOnGlobalRegion(plugin, () -> worldManager.deleteWorld(DeleteWorldOptions.world(world))
                 .onSuccess(deletedWorldName -> {
                     Logging.fine("World delete success: " + deletedWorldName);
                     issuer.sendInfo(MVCorei18n.DELETE_SUCCESS, Replace.WORLD.with(deletedWorldName));
                 }).onFailure(failure -> {
                     Logging.fine("World delete failure: " + failure);
                     issuer.sendError(failure.getFailureMessage());
-                });
+                }));
     }
 
     @Service
     private static final class LegacyAlias extends DeleteCommand implements LegacyAliasCommand {
         @Inject
         LegacyAlias(
+                @NotNull MultiverseCore plugin,
                 @NotNull CommandQueueManager commandQueueManager,
                 @NotNull WorldManager worldManager,
                 @NotNull PlayerWorldTeleporter playerWorldTeleporter,
                 @NotNull WorldTickDeferrer worldTickDeferrer,
                 @NotNull RemovePlayerFlags flags) {
-            super(commandQueueManager, worldManager, playerWorldTeleporter, worldTickDeferrer, flags);
+            super(plugin, commandQueueManager, worldManager, playerWorldTeleporter, worldTickDeferrer, flags);
         }
 
         @Override

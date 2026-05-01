@@ -49,6 +49,7 @@ import org.mvplugins.multiverse.core.permissions.CorePermissions;
 import org.mvplugins.multiverse.core.teleportation.BlockSafety;
 import org.mvplugins.multiverse.core.teleportation.LocationManipulation;
 import org.mvplugins.multiverse.core.utils.CaseInsensitiveStringMap;
+import org.mvplugins.multiverse.core.utils.FoliaCompat;
 import org.mvplugins.multiverse.core.utils.ReflectHelper;
 import org.mvplugins.multiverse.core.utils.ServerProperties;
 import org.mvplugins.multiverse.core.utils.compatibility.BukkitCompatibility;
@@ -942,6 +943,13 @@ public final class WorldManager {
      * @return The created world.
      */
     private Attempt<World, WorldCreatorFailureReason> createBukkitWorld(WorldCreator worldCreator) {
+        if (FoliaCompat.isFolia()) {
+            Logging.warning("World creation is not supported on Folia servers.");
+            return Attempt.failure(WorldCreatorFailureReason.BUKKIT_CREATION_FAILED,
+                    Replace.WORLD.with(worldCreator.name()),
+                    Replace.ERROR.with(new UnsupportedOperationException(
+                            "Dynamic world loading is not supported on Folia servers.")));
+        }
         return Try.of(() -> {
             this.loadTracker.add(worldCreator.name());
             World world = worldCreator.createWorld();
@@ -968,6 +976,11 @@ public final class WorldManager {
      * @return The unloaded world.
      */
     private Try<Void> unloadBukkitWorld(World world, boolean save) {
+        if (FoliaCompat.isFolia()) {
+            Logging.warning("World unloading is not supported on Folia servers.");
+            return Try.failure(new UnsupportedOperationException(
+                    "Dynamic world unloading is not supported on Folia servers."));
+        }
         return Try.run(() -> {
             if (world == null) {
                 return;
