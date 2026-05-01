@@ -49,6 +49,7 @@ import org.mvplugins.multiverse.core.permissions.CorePermissions;
 import org.mvplugins.multiverse.core.teleportation.BlockSafety;
 import org.mvplugins.multiverse.core.teleportation.LocationManipulation;
 import org.mvplugins.multiverse.core.utils.CaseInsensitiveStringMap;
+import org.mvplugins.multiverse.core.utils.FoliaCompat;
 import org.mvplugins.multiverse.core.utils.ReflectHelper;
 import org.mvplugins.multiverse.core.utils.ServerProperties;
 import org.mvplugins.multiverse.core.utils.compatibility.BukkitCompatibility;
@@ -113,6 +114,7 @@ public final class WorldManager {
     private final ServerProperties serverProperties;
     private final CoreConfig config;
     private final EntityPurger entityPurger;
+    private final org.mvplugins.multiverse.core.MultiverseCore plugin;
 
     @Inject
     WorldManager(
@@ -127,7 +129,8 @@ public final class WorldManager {
             @NotNull CorePermissions corePermissions,
             @NotNull ServerProperties serverProperties,
             @NotNull CoreConfig config,
-            @NotNull EntityPurger entityPurger) {
+            @NotNull EntityPurger entityPurger,
+            @NotNull org.mvplugins.multiverse.core.MultiverseCore plugin) {
         this.worldsConfigManager = worldsConfigManager;
         this.worldNameChecker = worldNameChecker;
         this.biomeProviderFactory = biomeProviderFactory;
@@ -140,6 +143,7 @@ public final class WorldManager {
         this.serverProperties = serverProperties;
         this.config = config;
         this.entityPurger = entityPurger;
+        this.plugin = plugin;
 
         this.worldsMap = new CaseInsensitiveStringMap<>();
         this.loadedWorldsMap = new CaseInsensitiveStringMap<>();
@@ -944,7 +948,8 @@ public final class WorldManager {
     private Attempt<World, WorldCreatorFailureReason> createBukkitWorld(WorldCreator worldCreator) {
         return Try.of(() -> {
             this.loadTracker.add(worldCreator.name());
-            World world = worldCreator.createWorld();
+            // On Folia, world creation must run on the global region thread.
+            World world = FoliaCompat.callOnGlobalRegion(plugin, worldCreator::createWorld);
             if (world == null) {
                 throw new MultiverseWorldException(Message.of(MVCorei18n.EXCEPTION_MULTIVERSEWORLD_CREATENULL));
             }
@@ -973,7 +978,9 @@ public final class WorldManager {
                 return;
             }
             unloadTracker.add(world.getName());
-            if (!Bukkit.unloadWorld(world, save)) {
+            // On Folia, world unloading must run on the global region thread.
+            Boolean unloaded = FoliaCompat.callOnGlobalRegion(plugin, () -> Bukkit.unloadWorld(world, save));
+            if (!Boolean.TRUE.equals(unloaded)) {
                 throwUnloadException(world);
             }
             Logging.fine("Bukkit unloaded world: " + world.getName());

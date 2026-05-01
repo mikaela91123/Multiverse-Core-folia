@@ -7,7 +7,12 @@ import org.bukkit.entity.Entity;
 import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.NotNull;
 
+import java.lang.reflect.Method;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.Callable;
 
 /**
  * Compatibility layer for Folia's region-based threading model.
@@ -16,14 +21,71 @@ import java.util.concurrent.TimeUnit;
 public final class FoliaCompat {
 
     private static final boolean FOLIA;
+    private static final Method IS_GLOBAL_TICK_THREAD;
 
     static {
         FOLIA = Try.of(() -> Class.forName("io.papermc.paper.threadedregions.RegionizedServer"))
                 .map(clazz -> true)
                 .getOrElse(false);
+        IS_GLOBAL_TICK_THREAD = Try.of(() -> Bukkit.class.getMethod("isGlobalTickThread")).getOrNull();
     }
 
     private FoliaCompat() {
+    }
+
+    /**
+     * Checks if the current thread is the global region tick thread on Folia.
+     * On non-Folia, this is equivalent to {@link Bukkit#isPrimaryThread()}.
+     *
+     * @return True if the current thread can safely perform global server operations.
+     */
+    public static boolean isGlobalTickThread() {
+        if (!FOLIA) {
+            return Bukkit.isPrimaryThread();
+        }
+        if (IS_GLOBAL_TICK_THREAD == null) {
+            return false;
+        }
+        return Try.of(() -> (boolean) IS_GLOBAL_TICK_THREAD.invoke(null)).getOrElse(false);
+    }
+
+    /**
+     * Runs a callable on the global region thread and waits for the result.
+     * Use this for operations that mutate global server state (e.g. world creation/unloading).
+     * <p>
+     * If already on the global tick thread, the callable is invoked directly to avoid deadlock.
+     * Otherwise, the call is dispatched to the global region scheduler and the calling thread
+     * blocks until completion (or the timeout elapses).
+     *
+     * @param plugin   The plugin owning the task.
+     * @param callable The operation to invoke.
+     * @param <T>      The return type of the callable.
+     * @return The result of the callable.
+     * @throws Exception If the callable threw, or the wait timed out / was interrupted.
+     */
+    public static <T> T callOnGlobalRegion(@NotNull Plugin plugin, @NotNull Callable<T> callable) throws Exception {
+        if (!FOLIA || isGlobalTickThread()) {
+            return callable.call();
+        }
+        CompletableFuture<T> future = new CompletableFuture<>();
+        Bukkit.getGlobalRegionScheduler().run(plugin, task -> {
+            try {
+                future.complete(callable.call());
+            } catch (Throwable t) {
+                future.completeExceptionally(t);
+            }
+        });
+        try {
+            return future.get(60, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof Exception) {
+                throw (Exception) cause;
+            }
+            throw new RuntimeException(cause);
+        } catch (TimeoutException e) {
+            throw new RuntimeException("Timed out waiting for global region task", e);
+        }
     }
 
     /**
