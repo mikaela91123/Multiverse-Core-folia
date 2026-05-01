@@ -50,6 +50,7 @@ import org.mvplugins.multiverse.core.teleportation.BlockSafety;
 import org.mvplugins.multiverse.core.teleportation.LocationManipulation;
 import org.mvplugins.multiverse.core.utils.CaseInsensitiveStringMap;
 import org.mvplugins.multiverse.core.utils.FoliaCompat;
+import org.mvplugins.multiverse.core.utils.FoliaNmsHelper;
 import org.mvplugins.multiverse.core.utils.ReflectHelper;
 import org.mvplugins.multiverse.core.utils.ServerProperties;
 import org.mvplugins.multiverse.core.utils.compatibility.BukkitCompatibility;
@@ -944,11 +945,24 @@ public final class WorldManager {
      */
     private Attempt<World, WorldCreatorFailureReason> createBukkitWorld(WorldCreator worldCreator) {
         if (FoliaCompat.isFolia()) {
-            Logging.warning("World creation is not supported on Folia servers.");
-            return Attempt.failure(WorldCreatorFailureReason.BUKKIT_CREATION_FAILED,
-                    Replace.WORLD.with(worldCreator.name()),
-                    Replace.ERROR.with(new UnsupportedOperationException(
-                            "Dynamic world loading is not supported on Folia servers.")));
+            return Try.of(() -> {
+                this.loadTracker.add(worldCreator.name());
+                Logging.info("Using Folia NMS world creation for: " + worldCreator.name());
+                World world = FoliaNmsHelper.createWorldNms(worldCreator);
+                if (world == null) {
+                    throw new MultiverseWorldException(Message.of(MVCorei18n.EXCEPTION_MULTIVERSEWORLD_CREATENULL));
+                }
+                Logging.fine("Folia NMS created world: " + world.getName());
+                return world;
+            }).onFailure(exception -> {
+                Logging.severe("Failed to create world via Folia NMS: " + worldCreator.name());
+                exception.printStackTrace();
+            }).andFinally(() -> {
+                this.loadTracker.remove(worldCreator.name());
+            }).fold(throwable -> Attempt.failure(WorldCreatorFailureReason.BUKKIT_CREATION_FAILED,
+                            Replace.WORLD.with(worldCreator.name()),
+                            Replace.ERROR.with(throwable)),
+                    Attempt::success);
         }
         return Try.of(() -> {
             this.loadTracker.add(worldCreator.name());
@@ -977,9 +991,18 @@ public final class WorldManager {
      */
     private Try<Void> unloadBukkitWorld(World world, boolean save) {
         if (FoliaCompat.isFolia()) {
-            Logging.warning("World unloading is not supported on Folia servers.");
-            return Try.failure(new UnsupportedOperationException(
-                    "Dynamic world unloading is not supported on Folia servers."));
+            return Try.run(() -> {
+                if (world == null) {
+                    return;
+                }
+                unloadTracker.add(world.getName());
+                Logging.info("Using Folia NMS world unloading for: " + world.getName());
+                boolean unloaded = FoliaNmsHelper.unloadWorldNms(world, save);
+                if (!unloaded) {
+                    throwUnloadException(world);
+                }
+                Logging.fine("Folia NMS unloaded world: " + world.getName());
+            }).andFinally(() -> unloadTracker.remove(world.getName()));
         }
         return Try.run(() -> {
             if (world == null) {
